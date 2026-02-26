@@ -34,6 +34,11 @@ Thumbs.db
 *.log
 logs/
 
+# Claude personal overrides (do not share)
+CLAUDE.local.md
+.claude/settings.local.json
+.claude/worktrees/
+
 # Data / cache files
 *.csv
 *.parquet

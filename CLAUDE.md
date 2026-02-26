@@ -1,5 +1,10 @@
 # Stock Analysis Dashboard
 
+# Rules
+@.claude/rules/code-style.md
+@.claude/rules/testing.md
+@.claude/rules/security.md
+
 ## Tech Stack
 - Frontend: React + Vite + TradingView Lightweight Charts
 - Backend: Python + FastAPI
