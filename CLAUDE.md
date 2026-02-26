@@ -1,6 +1,7 @@
 # Stock Analysis Dashboard
 
 # Rules
+@.claude/rules/workflow.md
 @.claude/rules/code-style.md
 @.claude/rules/testing.md
 @.claude/rules/security.md
