@@ -43,4 +43,5 @@ CLAUDE.local.md
 *.csv
 *.parquet
 *.pkl
+*.db
 cache/
