@@ -30,9 +30,10 @@ const MA_COLORS: Record<number, string> = {
 
 interface Props {
   symbol: string
+  name?: string | null
 }
 
-export function ChartPanel({ symbol }: Props) {
+export function ChartPanel({ symbol, name }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const [period, setPeriod] = useState<Period>('3M')
@@ -144,6 +145,12 @@ export function ChartPanel({ symbol }: Props) {
     <div className="flex flex-col h-full">
       {/* Toolbar */}
       <div className="flex items-center gap-3 px-3 py-2 border-b border-border flex-shrink-0">
+        {/* 当前股票标题 */}
+        <div className="flex items-baseline gap-2 mr-1">
+          <span className="font-mono text-sm font-bold text-white">{symbol}</span>
+          {name && <span className="text-accent-gray text-xs">{name}</span>}
+        </div>
+        <div className="w-px h-4 bg-border" />
         <div className="flex gap-1">
           {PERIODS.map((p) => (
             <button
@@ -158,7 +165,7 @@ export function ChartPanel({ symbol }: Props) {
             </button>
           ))}
         </div>
-        <div className="w-px h-4 bg-border" />
+        <div className="w-px h-4 bg-border flex-shrink-0" />
         <div className="flex gap-1">
           {INDICATOR_TYPES.map((ind) => (
             <button

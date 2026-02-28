@@ -11,7 +11,9 @@ export function SearchBar({ onSelect }: Props) {
   const [results, setResults] = useState<SearchResult[]>([])
   const [open, setOpen] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
+  // 搜索防抖
   useEffect(() => {
     if (!query.trim()) { setResults([]); setOpen(false); return }
     if (timerRef.current) clearTimeout(timerRef.current)
@@ -26,6 +28,17 @@ export function SearchBar({ onSelect }: Props) {
     }, 300)
   }, [query])
 
+  // 点击外部关闭下拉
+  useEffect(() => {
+    const handleMouseDown = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleMouseDown)
+    return () => document.removeEventListener('mousedown', handleMouseDown)
+  }, [])
+
   const handleSelect = (r: SearchResult) => {
     onSelect(r)
     setQuery('')
@@ -34,12 +47,12 @@ export function SearchBar({ onSelect }: Props) {
   }
 
   return (
-    <div className="relative w-72">
+    <div ref={containerRef} className="relative w-72">
       <input
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="搜索股票代码或名称…"
+        placeholder="搜索 A 股代码或名称…"
         className="w-full bg-bg-secondary border border-border rounded px-3 py-1.5 text-sm
                    text-slate-200 placeholder-accent-gray focus:outline-none focus:border-accent-blue"
       />
@@ -49,10 +62,10 @@ export function SearchBar({ onSelect }: Props) {
             <li
               key={r.symbol}
               onClick={() => handleSelect(r)}
-              className="px-3 py-2 cursor-pointer hover:bg-bg-hover flex justify-between"
+              className="px-3 py-2 cursor-pointer hover:bg-bg-hover flex justify-between items-center"
             >
-              <span className="text-slate-200 font-mono">{r.symbol}</span>
-              <span className="text-accent-gray ml-4 truncate">{r.name}</span>
+              <span className="text-slate-200 font-mono text-xs">{r.symbol}</span>
+              <span className="text-accent-gray text-xs ml-4 truncate">{r.name}</span>
             </li>
           ))}
         </ul>

@@ -12,25 +12,20 @@ export default function App() {
   const [selected, setSelected] = useState<string>('AAPL')
   const { items, add, remove } = useWatchlist()
 
-  // Real-time price for the currently selected symbol
   const { price: livePrice } = useWebSocket(selected)
 
-  // Accumulated live prices for sidebar display
   const [prices, setPrices] = useState<Record<string, WsPrice>>({})
 
-  // Update accumulated prices when live price updates
   const onLivePrice = useCallback((p: WsPrice) => {
     setPrices((prev) => ({ ...prev, [p.symbol]: p }))
   }, [])
 
-  // Keep sidebar prices in sync with the active WS feed
   if (livePrice && (!prices[livePrice.symbol] || prices[livePrice.symbol].timestamp !== livePrice.timestamp)) {
     onLivePrice(livePrice)
   }
 
   const handleSearch = (result: SearchResult) => {
     setSelected(result.symbol)
-    // Auto-add to watchlist if not already present
     const alreadyIn = items.some((i) => i.symbol === result.symbol)
     if (!alreadyIn) {
       add(result.symbol, result.name, result.market).catch(() => {})
@@ -41,6 +36,9 @@ export default function App() {
   Object.entries(prices).forEach(([sym, p]) => {
     sidebarPrices[sym] = { price: p.price, change_pct: p.change_pct }
   })
+
+  // 从 watchlist 中找到当前股票的名称
+  const selectedName = items.find((i) => i.symbol === selected)?.name ?? null
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-bg-primary">
@@ -56,12 +54,10 @@ export default function App() {
         />
 
         <main className="flex-1 flex flex-col overflow-hidden">
-          {/* Chart — takes most vertical space */}
           <div className="flex-1 overflow-hidden border-b border-border">
-            <ChartPanel symbol={selected} />
+            <ChartPanel symbol={selected} name={selectedName} />
           </div>
 
-          {/* Bottom panels */}
           <div className="h-52 flex gap-3 p-3 overflow-auto flex-shrink-0">
             <div className="flex-1 min-w-0">
               <FundamentalsPanel symbol={selected} />

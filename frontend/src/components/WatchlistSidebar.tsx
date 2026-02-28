@@ -25,14 +25,24 @@ export function WatchlistSidebar({ items, selected, prices, onSelect, onRemove }
             <li
               key={item.symbol}
               onClick={() => onSelect(item.symbol)}
-              className={`group px-3 py-2 cursor-pointer border-b border-border/50 flex items-center justify-between
-                ${isActive ? 'bg-bg-hover border-l-2 border-l-accent-blue' : 'hover:bg-bg-hover'}`}
+              className={`group px-2 py-2 cursor-pointer border-b border-border/50 flex items-center gap-1
+                ${isActive
+                  ? 'bg-blue-500/10 border-l-4 border-l-blue-400'
+                  : 'border-l-4 border-l-transparent hover:bg-bg-hover'
+                }`}
             >
+              {/* 股票信息 */}
               <div className="flex-1 min-w-0">
-                <div className="font-mono text-xs text-slate-200 truncate">{item.symbol}</div>
-                <div className="text-accent-gray text-xs truncate">{item.name ?? ''}</div>
+                <div className={`font-mono text-xs truncate ${isActive ? 'text-white font-bold' : 'text-slate-300'}`}>
+                  {item.symbol}
+                </div>
+                <div className={`text-xs truncate ${isActive ? 'text-slate-300' : 'text-accent-gray'}`}>
+                  {item.name ?? ''}
+                </div>
               </div>
-              <div className="ml-2 text-right flex-shrink-0">
+
+              {/* 价格区 */}
+              <div className="text-right flex-shrink-0">
                 {live ? (
                   <>
                     <div className="font-mono text-xs text-slate-200">{live.price.toFixed(2)}</div>
@@ -41,13 +51,15 @@ export function WatchlistSidebar({ items, selected, prices, onSelect, onRemove }
                     </div>
                   </>
                 ) : (
-                  <div className="text-accent-gray text-xs">—</div>
+                  <div className="text-slate-600 text-xs">—</div>
                 )}
               </div>
+
+              {/* 删除按钮：始终可见，hover 变红 */}
               <button
                 onClick={(e) => { e.stopPropagation(); onRemove(item.symbol) }}
-                className="ml-1 opacity-0 group-hover:opacity-100 text-accent-gray hover:text-accent-red text-xs px-1"
-                title="删除"
+                title="从自选股移除"
+                className="flex-shrink-0 w-4 text-center text-slate-600 hover:text-red-400 text-sm leading-none transition-colors"
               >
                 ✕
               </button>
