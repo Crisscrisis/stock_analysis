@@ -14,7 +14,7 @@ FAKE_FUNDAMENTALS = {
 
 class TestFundamentals:
     async def test_returns_data(self, client):
-        with patch("routers.fundamentals.fetcher.get_fundamentals", new=AsyncMock(return_value=FAKE_FUNDAMENTALS)):
+        with patch("routers.fundamentals.fundamentals_data.get_fundamentals", new=AsyncMock(return_value=FAKE_FUNDAMENTALS)):
             resp = await client.get("/api/fundamentals/AAPL")
         assert resp.status_code == 200
         body = resp.json()
@@ -23,7 +23,7 @@ class TestFundamentals:
         assert body["data"]["symbol"] == "AAPL"
 
     async def test_fetcher_error_returns_500(self, client):
-        with patch("routers.fundamentals.fetcher.get_fundamentals", new=AsyncMock(side_effect=Exception("err"))):
+        with patch("routers.fundamentals.fundamentals_data.get_fundamentals", new=AsyncMock(side_effect=Exception("err"))):
             resp = await client.get("/api/fundamentals/AAPL")
         assert resp.json()["code"] == 500
 
@@ -31,6 +31,6 @@ class TestFundamentals:
         sparse = {"symbol": "TST", "pe_ttm": None, "pb": None,
                   "market_cap": None, "revenue_ttm": None,
                   "net_profit_ttm": None, "dividend_yield": None}
-        with patch("routers.fundamentals.fetcher.get_fundamentals", new=AsyncMock(return_value=sparse)):
+        with patch("routers.fundamentals.fundamentals_data.get_fundamentals", new=AsyncMock(return_value=sparse)):
             resp = await client.get("/api/fundamentals/TST")
         assert resp.json()["code"] == 200

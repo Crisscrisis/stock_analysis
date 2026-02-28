@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from database import get_db
 from schemas.stock import IndicatorsResponse, MAResult, MACDResult, RSIResult, BollingerResult
-from services import calculator, fetcher
+from services import calculator, stock_data
 
 router = APIRouter()
 
@@ -20,10 +22,11 @@ async def get_indicators(
     types: str = Query("MA,MACD,RSI,BOLLINGER"),
     period: str = Query("6M"),
     interval: str = Query("1d"),
+    db: AsyncSession = Depends(get_db),
 ) -> dict:
     requested = {t.strip().upper() for t in types.split(",")}
     try:
-        bars = await fetcher.get_ohlcv(symbol, period, interval)
+        bars = await stock_data.get_ohlcv(db, symbol, period, interval)
     except Exception:
         return _err(500, "Failed to fetch price data")
 

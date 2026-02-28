@@ -1,4 +1,4 @@
-"""Tests for stocks router — fetcher is mocked."""
+"""Tests for stocks router — stock_data service is mocked."""
 import pytest
 from unittest.mock import AsyncMock, patch
 
@@ -21,7 +21,7 @@ FAKE_SEARCH = [
 
 class TestOHLCV:
     async def test_returns_bars(self, client):
-        with patch("routers.stocks.fetcher.get_ohlcv", new=AsyncMock(return_value=FAKE_BARS)):
+        with patch("routers.stocks.stock_data.get_ohlcv", new=AsyncMock(return_value=FAKE_BARS)):
             resp = await client.get("/api/stocks/AAPL/ohlcv?period=1M&interval=1d")
         assert resp.status_code == 200
         body = resp.json()
@@ -30,14 +30,18 @@ class TestOHLCV:
         assert len(body["data"]["bars"]) == 2
         assert body["data"]["bars"][0]["close"] == 103.0
 
-    async def test_fetcher_called_with_correct_args(self, client):
+    async def test_service_called_with_correct_args(self, client):
         mock = AsyncMock(return_value=FAKE_BARS)
-        with patch("routers.stocks.fetcher.get_ohlcv", new=mock):
+        with patch("routers.stocks.stock_data.get_ohlcv", new=mock):
             await client.get("/api/stocks/600519.SH/ohlcv?period=3M&interval=1d")
-        mock.assert_called_once_with("600519.SH", "3M", "1d")
+        # stock_data.get_ohlcv receives (db, symbol, period, interval)
+        args = mock.call_args
+        assert args[0][1] == "600519.SH"
+        assert args[0][2] == "3M"
+        assert args[0][3] == "1d"
 
-    async def test_fetcher_error_returns_500(self, client):
-        with patch("routers.stocks.fetcher.get_ohlcv", new=AsyncMock(side_effect=Exception("network error"))):
+    async def test_service_error_returns_500(self, client):
+        with patch("routers.stocks.stock_data.get_ohlcv", new=AsyncMock(side_effect=Exception("network error"))):
             resp = await client.get("/api/stocks/AAPL/ohlcv")
         assert resp.status_code == 200
         assert resp.json()["code"] == 500

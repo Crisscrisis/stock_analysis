@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from database import get_db
 from schemas.stock import OHLCVResponse, OHLCVBar, QuoteResponse, SearchResult
-from services import fetcher
+from services import fetcher, stock_data
 
 router = APIRouter()
 
@@ -19,9 +21,10 @@ async def get_ohlcv(
     symbol: str,
     period: str = Query("1M"),
     interval: str = Query("1d"),
+    db: AsyncSession = Depends(get_db),
 ) -> dict:
     try:
-        bars = await fetcher.get_ohlcv(symbol, period, interval)
+        bars = await stock_data.get_ohlcv(db, symbol, period, interval)
     except ValueError as e:
         return _err(404, str(e))
     except Exception:
