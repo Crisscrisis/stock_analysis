@@ -8,7 +8,8 @@
 - **技术指标** — MA5/10/20/60、MACD、RSI（14日）、布林带，叠加在同一图表
 - **基本面数据** — PE、PB、营收/净利润、股息率、总市值
 - **资金流向** — 北向资金（A股）、主力净流入、龙虎榜
-- **自选股管理** — 侧边栏增删自选股，默认纳斯达克 100 前 20 只
+- **多市场搜索** — 支持 A股/美股/港股 统一搜索，结果带市场标记，回车快速选股
+- **自选股管理** — 侧边栏增删自选股，显示市场标记（A/US/HK），默认纳斯达克 100 前 20 只
 - **实时价格** — WebSocket 实时推送当前查看股票的最新价格
 
 ## 支持市场
@@ -132,7 +133,7 @@ cd frontend && conda run -n base npm run build
 |------|------|------|
 | GET | `/api/stocks/{symbol}/ohlcv` | 历史 K 线 |
 | GET | `/api/stocks/{symbol}/quote` | 实时报价 |
-| GET | `/api/stocks/search?q=` | 搜索股票 |
+| GET | `/api/stocks/search?q=` | 搜索股票（A/US/HK 多市场） |
 | GET | `/api/indicators/{symbol}` | 技术指标 |
 | GET | `/api/fundamentals/{symbol}` | 基本面 |
 | GET | `/api/capital-flow/{symbol}` | 资金流向（仅 A 股） |

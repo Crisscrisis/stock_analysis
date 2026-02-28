@@ -174,10 +174,32 @@ def _sync_search_akshare(q: str) -> list[dict]:
     df = ak.stock_zh_a_spot_em()
     mask = df["名称"].str.contains(q, na=False) | df["代码"].str.contains(q, na=False)
     results = []
-    for _, row in df[mask].head(20).iterrows():
+    for _, row in df[mask].head(10).iterrows():
         code = row["代码"]
         exchange = "SH" if code.startswith(("6", "5")) else "SZ"
         results.append({"symbol": f"{code}.{exchange}", "name": row["名称"], "market": "A"})
+    return results
+
+
+def _sync_search_yfinance(q: str) -> list[dict]:
+    import yfinance as yf
+    search = yf.Search(q)
+    results = []
+    for item in (search.quotes or [])[:10]:
+        symbol = item.get("symbol", "")
+        name = item.get("shortname") or item.get("longname") or symbol
+        results.append({"symbol": symbol, "name": name, "market": "US"})
+    return results
+
+
+def _sync_search_akshare_hk(q: str) -> list[dict]:
+    import akshare as ak
+    df = ak.stock_hk_spot_em()
+    mask = df["名称"].str.contains(q, na=False) | df["代码"].str.contains(q, na=False)
+    results = []
+    for _, row in df[mask].head(10).iterrows():
+        code = row["代码"]
+        results.append({"symbol": f"{code}.HK", "name": row["名称"], "market": "HK"})
     return results
 
 
@@ -266,10 +288,22 @@ async def get_quote(symbol: str) -> dict[str, Any]:
 async def search_stocks(q: str) -> list[dict[str, Any]]:
     if not q or len(q) > 50:
         return []
-    try:
-        return await asyncio.to_thread(_sync_search_akshare, q)
-    except Exception:
-        return []
+    results_list = await asyncio.gather(
+        asyncio.to_thread(_sync_search_akshare, q),
+        asyncio.to_thread(_sync_search_yfinance, q),
+        asyncio.to_thread(_sync_search_akshare_hk, q),
+        return_exceptions=True,
+    )
+    merged: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for result in results_list:
+        if isinstance(result, Exception):
+            continue
+        for item in result:
+            if item["symbol"] not in seen:
+                seen.add(item["symbol"])
+                merged.append(item)
+    return merged[:30]
 
 
 async def get_fundamentals(symbol: str) -> dict[str, Any]:

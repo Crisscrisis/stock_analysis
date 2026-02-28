@@ -1,5 +1,18 @@
 import type { WatchlistItem } from '../types'
 
+const MARKET_BADGE: Record<string, string> = {
+  A: 'bg-red-500/20 text-red-400',
+  US: 'bg-blue-500/20 text-blue-400',
+  HK: 'bg-orange-500/20 text-orange-400',
+}
+
+function getMarket(symbol: string): string {
+  const upper = symbol.toUpperCase()
+  if (upper.endsWith('.SH') || upper.endsWith('.SZ')) return 'A'
+  if (upper.endsWith('.HK')) return 'HK'
+  return 'US'
+}
+
 interface Props {
   items: WatchlistItem[]
   selected: string | null
@@ -33,7 +46,10 @@ export function WatchlistSidebar({ items, selected, prices, onSelect, onRemove }
             >
               {/* 股票信息 */}
               <div className="flex-1 min-w-0">
-                <div className={`font-mono text-xs truncate ${isActive ? 'text-white font-bold' : 'text-slate-300'}`}>
+                <div className={`font-mono text-xs truncate flex items-center gap-1 ${isActive ? 'text-white font-bold' : 'text-slate-300'}`}>
+                  <span className={`${MARKET_BADGE[getMarket(item.symbol)] ?? 'bg-gray-500/20 text-gray-400'} text-[9px] font-semibold px-1 py-0.5 rounded leading-none`}>
+                    {getMarket(item.symbol)}
+                  </span>
                   {item.symbol}
                 </div>
                 <div className={`text-xs truncate ${isActive ? 'text-slate-300' : 'text-accent-gray'}`}>

@@ -1,6 +1,6 @@
 """Tests for stocks router — stock_data service is mocked."""
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 
 FAKE_BARS = [
     {"timestamp": 1700000000, "open": 100.0, "high": 105.0, "low": 99.0, "close": 103.0, "volume": 1000.0},
@@ -76,3 +76,38 @@ class TestSearch:
     async def test_missing_query_returns_422(self, client):
         resp = await client.get("/api/stocks/search")
         assert resp.status_code == 422
+
+
+class TestMultiMarketSearch:
+    """Unit tests for fetcher.search_stocks multi-market merging."""
+
+    async def test_search_returns_multi_market(self):
+        from services.fetcher import search_stocks
+
+        a_results = [{"symbol": "600519.SH", "name": "贵州茅台", "market": "A"}]
+        us_results = [{"symbol": "AAPL", "name": "Apple Inc.", "market": "US"}]
+        hk_results = [{"symbol": "00700.HK", "name": "腾讯控股", "market": "HK"}]
+
+        with patch("services.fetcher._sync_search_akshare", return_value=a_results), \
+             patch("services.fetcher._sync_search_yfinance", return_value=us_results), \
+             patch("services.fetcher._sync_search_akshare_hk", return_value=hk_results):
+            results = await search_stocks("test")
+
+        assert len(results) == 3
+        markets = {r["market"] for r in results}
+        assert markets == {"A", "US", "HK"}
+
+    async def test_search_partial_failure(self):
+        from services.fetcher import search_stocks
+
+        a_results = [{"symbol": "600519.SH", "name": "贵州茅台", "market": "A"}]
+        us_results = [{"symbol": "AAPL", "name": "Apple Inc.", "market": "US"}]
+
+        with patch("services.fetcher._sync_search_akshare", return_value=a_results), \
+             patch("services.fetcher._sync_search_yfinance", return_value=us_results), \
+             patch("services.fetcher._sync_search_akshare_hk", side_effect=Exception("HK unavailable")):
+            results = await search_stocks("test")
+
+        assert len(results) == 2
+        markets = {r["market"] for r in results}
+        assert markets == {"A", "US"}
