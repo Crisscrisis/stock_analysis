@@ -107,10 +107,45 @@ VITE v7.x.x  ready in xxx ms
 - **图表区域**：切换周期（1M/3M/6M/1Y/3Y），开关指标（MA/MACD/RSI/BOLLINGER）
 - **底部面板**：自动加载当前股票的基本面和资金流向数据
 
+## CLI 数据查看工具
+
+项目提供了一个只读 CLI 工具，可直接查看本地 SQLite 数据库中的缓存数据，无需启动后端服务。
+
+```bash
+cd backend
+
+# 数据库概览（文件大小、各表行数、数据时间范围）
+python cli.py stats
+
+# 查看自选股列表
+python cli.py watchlist
+
+# 列出所有有缓存数据的股票及 K 线条数
+python cli.py ohlcv --list
+
+# 查看某只股票的 OHLCV 数据（默认最近 20 条）
+python cli.py ohlcv AAPL
+
+# 指定条数和周期
+python cli.py ohlcv AAPL --limit 50
+python cli.py ohlcv AAPL --interval 1w
+
+# 查看所有缓存的基本面数据
+python cli.py fundamentals
+
+# 查看某只股票的基本面详情
+python cli.py fundamentals AAPL
+
+# 指定数据库路径（默认 ./stock_analysis.db）
+python cli.py --db /path/to/other.db stats
+```
+
+> **注意**：CLI 为纯只读工具，不会修改任何数据。仅使用 Python 标准库，无需额外安装依赖。
+
 ## 开发命令
 
 ```bash
-# 后端测试（62 个测试）
+# 后端测试（87 个测试）
 cd backend && conda run -n base pytest
 
 # 前端类型检查
@@ -146,6 +181,7 @@ cd frontend && conda run -n base npm run build
 stock_analysis/
 ├── backend/
 │   ├── main.py               # FastAPI 入口
+│   ├── cli.py                # CLI 数据查看工具（只读）
 │   ├── config.py              # 环境变量配置
 │   ├── database.py            # 数据库连接
 │   ├── models/
