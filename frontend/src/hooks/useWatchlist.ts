@@ -55,8 +55,8 @@ export function useWatchlist() {
   }, [load])
 
   const remove = useCallback(async (symbol: string) => {
-    await watchlistApi.remove(symbol)
     setItems((prev) => prev.filter((i) => i.symbol !== symbol))
+    try { await watchlistApi.remove(symbol) } catch { /* default stock not in backend */ }
   }, [])
 
   return { items, loading, add, remove, reload: load }
