@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
-"""CLI tool for viewing stock analysis database contents (read-only)."""
+"""CLI tool for viewing stock analysis database contents and crawling data."""
 
 import argparse
+import asyncio
 import os
 import sqlite3
 import sys
 from datetime import datetime, timezone
+
+from crawler.orchestrator import crawl_all, crawl_index
+from crawler.registry import INDICES
 
 
 DEFAULT_DB = "./stock_analysis.db"
@@ -281,6 +285,106 @@ def cmd_fundamentals(args: argparse.Namespace) -> None:
     conn.close()
 
 
+def cmd_constituents(args: argparse.Namespace) -> None:
+    """List index constituents."""
+    conn = get_connection(args.db)
+    cur = conn.cursor()
+
+    if args.index_name:
+        # Show constituents for a specific index
+        try:
+            cur.execute(
+                "SELECT symbol, name, market, is_active, added_at, removed_at "
+                "FROM index_constituent "
+                "WHERE index_name = ? "
+                "ORDER BY is_active DESC, symbol",
+                (args.index_name,),
+            )
+            rows = cur.fetchall()
+        except sqlite3.OperationalError:
+            print("(index_constituent table not found)")
+            conn.close()
+            return
+
+        if not rows:
+            print(f"No constituents found for {args.index_name}")
+            conn.close()
+            return
+
+        active = [r for r in rows if r[3]]
+        inactive = [r for r in rows if not r[3]]
+
+        print(f"{args.index_name}  ({len(active)} active, {len(inactive)} inactive)")
+        print()
+        headers = ["Symbol", "Name", "Market", "Status", "Added"]
+        formatted = [
+            [
+                r[0],
+                r[1] or "-",
+                r[2],
+                "active" if r[3] else "removed",
+                fmt_ts(r[4]),
+            ]
+            for r in rows
+        ]
+        print_table(headers, formatted)
+    else:
+        # Summary of all indices
+        try:
+            cur.execute(
+                "SELECT index_name, market, "
+                "SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END), "
+                "COUNT(*) "
+                "FROM index_constituent "
+                "GROUP BY index_name, market "
+                "ORDER BY index_name"
+            )
+            rows = cur.fetchall()
+        except sqlite3.OperationalError:
+            print("(index_constituent table not found)")
+            conn.close()
+            return
+
+        headers = ["Index", "Market", "Active", "Total"]
+        formatted = [
+            [r[0], r[1], str(r[2]), str(r[3])]
+            for r in rows
+        ]
+        print_table(headers, formatted)
+
+    conn.close()
+
+
+def cmd_crawl(args: argparse.Namespace) -> None:
+    """Crawl index constituent data."""
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    from database import Base
+
+    db_url = f"sqlite+aiosqlite:///{args.db}"
+
+    async def _run() -> None:
+        engine = create_async_engine(db_url, echo=False)
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+
+        if args.index_name:
+            name = args.index_name
+            if name not in INDICES:
+                print(f"Unknown index: {name}. Available: {', '.join(INDICES.keys())}")
+                return
+            report = await crawl_index(factory, name, backfill=args.backfill)
+            report.print_summary()
+        else:
+            reports = await crawl_all(factory, backfill=args.backfill)
+            for report in reports:
+                report.print_summary()
+
+        await engine.dispose()
+
+    asyncio.run(_run())
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the argument parser with all subcommands."""
     parser = argparse.ArgumentParser(
@@ -317,6 +421,21 @@ def build_parser() -> argparse.ArgumentParser:
         "symbol", nargs="?", help="Stock symbol (e.g. AAPL)"
     )
 
+    # constituents
+    const_parser = sub.add_parser("constituents", help="View index constituents")
+    const_parser.add_argument(
+        "index_name", nargs="?", help="Index name (e.g. NASDAQ100, HSI, HSTECH)"
+    )
+
+    # crawl
+    crawl_parser = sub.add_parser("crawl", help="Crawl index constituent data")
+    crawl_parser.add_argument(
+        "index_name", nargs="?", help="Index name (e.g. NASDAQ100, HSI, HSTECH)"
+    )
+    crawl_parser.add_argument(
+        "--backfill", action="store_true", help="Force backfill 1Y history"
+    )
+
     return parser
 
 
@@ -334,6 +453,8 @@ def main(argv: list[str] | None = None) -> None:
         "watchlist": cmd_watchlist,
         "ohlcv": cmd_ohlcv,
         "fundamentals": cmd_fundamentals,
+        "constituents": cmd_constituents,
+        "crawl": cmd_crawl,
     }
     commands[args.command](args)
 

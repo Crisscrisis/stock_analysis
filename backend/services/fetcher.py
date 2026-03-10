@@ -11,11 +11,15 @@ Symbol convention at API boundary:
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 import time
 from typing import Any
 
 import pandas as pd
+import yfinance as yf
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -35,6 +39,12 @@ def _to_akshare_a(symbol: str) -> str:
     """'600519.SH' → 'sh600519'"""
     code, exchange = symbol.upper().rsplit(".", 1)
     return exchange.lower() + code
+
+
+def _hk_to_yfinance(symbol: str) -> str:
+    """Convert 00700.HK → 0700.HK for yfinance (Yahoo Finance format)."""
+    code = symbol.upper().replace(".HK", "")
+    return f"{int(code):04d}.HK"
 
 
 def _validate_symbol(symbol: str) -> None:
@@ -271,7 +281,11 @@ async def get_ohlcv(symbol: str, period: str = "1M", interval: str = "1d") -> li
     if market == "A":
         return await asyncio.to_thread(_sync_ohlcv_akshare_a, symbol, period, interval)
     if market == "HK":
-        return await asyncio.to_thread(_sync_ohlcv_akshare_hk, symbol, period, interval)
+        try:
+            return await asyncio.to_thread(_sync_ohlcv_akshare_hk, symbol, period, interval)
+        except Exception:
+            logger.warning("akshare HK OHLCV failed for %s, falling back to yfinance", symbol)
+            return await asyncio.to_thread(_sync_ohlcv_yfinance, _hk_to_yfinance(symbol), period, interval)
     return await asyncio.to_thread(_sync_ohlcv_yfinance, symbol, period, interval)
 
 
@@ -313,8 +327,12 @@ async def get_fundamentals(symbol: str) -> dict[str, Any]:
         return await asyncio.to_thread(_sync_fundamentals_yfinance, symbol)
     if market == "A":
         return await asyncio.to_thread(_sync_fundamentals_akshare_a, symbol)
-    return {"symbol": symbol, "pe_ttm": None, "pb": None, "market_cap": None,
-            "revenue_ttm": None, "net_profit_ttm": None, "dividend_yield": None}
+    # HK: try akshare (eastmoney), fallback to yfinance
+    try:
+        return await asyncio.to_thread(_sync_fundamentals_akshare_hk, symbol)
+    except Exception:
+        logger.warning("akshare HK fundamentals failed for %s, falling back to yfinance", symbol)
+        return await asyncio.to_thread(_sync_fundamentals_yfinance, _hk_to_yfinance(symbol))
 
 
 async def get_capital_flow(symbol: str) -> dict[str, Any]:
@@ -322,3 +340,206 @@ async def get_capital_flow(symbol: str) -> dict[str, Any]:
     if _market(symbol) != "A":
         raise ValueError("Capital flow data is only available for A-share stocks")
     return await asyncio.to_thread(_sync_capital_flow_akshare, symbol)
+
+
+# ---------------------------------------------------------------------------
+# Earnings (T-18)
+# ---------------------------------------------------------------------------
+
+def _sync_earnings_yfinance(symbol: str) -> list[dict]:
+    ticker = yf.Ticker(symbol)
+    results = []
+    # Quarterly
+    q_stmt = ticker.quarterly_income_stmt
+    if q_stmt is not None and not q_stmt.empty:
+        for col in q_stmt.columns:
+            period_end = pd.Timestamp(col).strftime("%Y-%m-%d")
+            results.append({
+                "period_end": period_end,
+                "period_type": "quarterly",
+                "revenue": _safe_float(q_stmt, "Total Revenue", col),
+                "net_income": _safe_float(q_stmt, "Net Income", col),
+                "eps": _safe_float(q_stmt, "Basic EPS", col),
+                "gross_profit": _safe_float(q_stmt, "Gross Profit", col),
+                "operating_income": _safe_float(q_stmt, "Operating Income", col),
+            })
+    # Annual
+    a_stmt = ticker.income_stmt
+    if a_stmt is not None and not a_stmt.empty:
+        for col in a_stmt.columns:
+            period_end = pd.Timestamp(col).strftime("%Y-%m-%d")
+            results.append({
+                "period_end": period_end,
+                "period_type": "annual",
+                "revenue": _safe_float(a_stmt, "Total Revenue", col),
+                "net_income": _safe_float(a_stmt, "Net Income", col),
+                "eps": _safe_float(a_stmt, "Basic EPS", col),
+                "gross_profit": _safe_float(a_stmt, "Gross Profit", col),
+                "operating_income": _safe_float(a_stmt, "Operating Income", col),
+            })
+    return results
+
+
+def _safe_float(df: pd.DataFrame, row_label: str, col: Any) -> float | None:
+    try:
+        val = df.loc[row_label, col]
+        if pd.isna(val):
+            return None
+        return float(val)
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _sync_earnings_akshare_hk(symbol: str) -> list[dict]:
+    import akshare as ak
+    code = symbol.upper().replace(".HK", "")
+    try:
+        df = ak.stock_financial_hk_report_em(stock=code, symbol="利润")
+    except Exception:
+        logger.exception("Failed to fetch HK earnings for %s", symbol)
+        return []
+    if df is None or df.empty:
+        return []
+    results = []
+    for _, row in df.iterrows():
+        results.append({
+            "period_end": str(row.get("REPORT_DATE", ""))[:10],
+            "period_type": "annual",
+            "revenue": _row_float(row, "TOTAL_OPERATE_INCOME"),
+            "net_income": _row_float(row, "NETPROFIT"),
+            "eps": _row_float(row, "BASIC_EPS"),
+            "gross_profit": _row_float(row, "TOTAL_PROFIT"),
+            "operating_income": _row_float(row, "OPERATE_PROFIT"),
+        })
+    return results
+
+
+def _row_float(row: Any, key: str) -> float | None:
+    try:
+        val = row.get(key)
+        if val is None or (isinstance(val, float) and pd.isna(val)):
+            return None
+        return float(val)
+    except (TypeError, ValueError):
+        return None
+
+
+async def get_earnings(symbol: str) -> list[dict]:
+    _validate_symbol(symbol)
+    market = _market(symbol)
+    if market == "HK":
+        try:
+            return await asyncio.to_thread(_sync_earnings_akshare_hk, symbol)
+        except Exception:
+            logger.warning("akshare HK earnings failed for %s, falling back to yfinance", symbol)
+            return await asyncio.to_thread(_sync_earnings_yfinance, _hk_to_yfinance(symbol))
+    return await asyncio.to_thread(_sync_earnings_yfinance, symbol)
+
+
+# ---------------------------------------------------------------------------
+# Dividends (T-20)
+# ---------------------------------------------------------------------------
+
+def _sync_dividends_yfinance(symbol: str) -> list[dict]:
+    ticker = yf.Ticker(symbol)
+    divs = ticker.dividends
+    if divs is None or divs.empty:
+        return []
+    results = []
+    for dt, amount in divs.items():
+        results.append({
+            "ex_date": pd.Timestamp(dt).strftime("%Y-%m-%d"),
+            "amount": float(amount),
+            "currency": "USD",
+        })
+    return results
+
+
+def _sync_dividends_akshare_hk(symbol: str) -> list[dict]:
+    import akshare as ak
+    code = symbol.upper().replace(".HK", "")
+    try:
+        df = ak.stock_hk_dividend_payout_em(symbol=code)
+    except Exception:
+        logger.exception("Failed to fetch HK dividends for %s", symbol)
+        return []
+    if df is None or df.empty:
+        return []
+    results = []
+    for _, row in df.iterrows():
+        ex_date = str(row.get("除净日", ""))[:10]
+        if not ex_date or ex_date == "nan" or ex_date == "NaT":
+            continue
+        # Parse amount from "分红方案" like "每股派港币4.5元"
+        plan = str(row.get("分红方案", ""))
+        amount = _parse_hk_dividend_amount(plan)
+        currency = "HKD" if "港币" in plan else "CNY"
+        results.append({
+            "ex_date": ex_date,
+            "amount": amount,
+            "currency": currency,
+        })
+    return results
+
+
+def _parse_hk_dividend_amount(plan: str) -> float:
+    """Parse dividend amount from text like '每股派港币4.5元'."""
+    import re as _re
+    m = _re.search(r"(\d+\.?\d*)", plan)
+    return float(m.group(1)) if m else 0.0
+
+
+async def get_dividends(symbol: str) -> list[dict]:
+    _validate_symbol(symbol)
+    market = _market(symbol)
+    if market == "HK":
+        try:
+            return await asyncio.to_thread(_sync_dividends_akshare_hk, symbol)
+        except Exception:
+            logger.warning("akshare HK dividends failed for %s, falling back to yfinance", symbol)
+            return await asyncio.to_thread(_sync_dividends_yfinance, _hk_to_yfinance(symbol))
+    return await asyncio.to_thread(_sync_dividends_yfinance, symbol)
+
+
+# ---------------------------------------------------------------------------
+# HK Fundamentals (T-22)
+# ---------------------------------------------------------------------------
+
+def _sync_fundamentals_akshare_hk(symbol: str) -> dict:
+    import akshare as ak
+    code = symbol.upper().replace(".HK", "")
+    try:
+        df = ak.stock_hk_spot_em()
+        row = df[df["代码"] == code]
+        if row.empty:
+            return {
+                "symbol": symbol, "pe_ttm": None, "pb": None,
+                "market_cap": None, "revenue_ttm": None,
+                "net_profit_ttm": None, "dividend_yield": None,
+            }
+        row = row.iloc[0]
+        return {
+            "symbol": symbol,
+            "pe_ttm": _try_float(row.get("市盈率(动态)")),
+            "pb": _try_float(row.get("市净率")),
+            "market_cap": _try_float(row.get("总市值")),
+            "revenue_ttm": None,
+            "net_profit_ttm": None,
+            "dividend_yield": None,
+        }
+    except Exception:
+        logger.exception("Failed to fetch HK fundamentals for %s", symbol)
+        return {
+            "symbol": symbol, "pe_ttm": None, "pb": None,
+            "market_cap": None, "revenue_ttm": None,
+            "net_profit_ttm": None, "dividend_yield": None,
+        }
+
+
+def _try_float(val: Any) -> float | None:
+    try:
+        if val is None or (isinstance(val, float) and pd.isna(val)):
+            return None
+        return float(val)
+    except (TypeError, ValueError):
+        return None
