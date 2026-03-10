@@ -147,8 +147,8 @@ export function ChartPanel({ symbol, name }: Props) {
       <div className="flex items-center gap-3 px-3 py-2 border-b border-border flex-shrink-0">
         {/* 当前股票标题 */}
         <div className="flex items-baseline gap-2 mr-1">
-          <span className="font-mono text-sm font-bold text-white">{symbol}</span>
-          {name && <span className="text-accent-gray text-xs">{name}</span>}
+          {name && <span className="text-sm font-bold text-white">{name}</span>}
+          <span className="font-mono text-xs text-accent-gray">{symbol.replace(/\.(SH|SZ|HK)$/i, '')}</span>
         </div>
         <div className="w-px h-4 bg-border" />
         <div className="flex gap-1">
