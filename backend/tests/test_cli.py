@@ -256,3 +256,59 @@ class TestDbNotFound:
     def test_missing_db(self):
         with pytest.raises(SystemExit):
             main(["--db", "/nonexistent/path.db", "stats"])
+
+
+# --- T-39: CLI crawl subcommand ---
+
+
+class TestCmdCrawl:
+    def test_crawl_all(self, capsys):
+        from unittest.mock import patch, AsyncMock
+        from crawler.report import CollectionReport
+
+        fake_reports = [
+            CollectionReport(
+                index_name="NASDAQ100", total=3, succeeded=3,
+                failed=0, skipped=0, elapsed_seconds=10.0,
+            ),
+        ]
+        with patch("cli.crawl_all", AsyncMock(return_value=fake_reports)):
+            main(["crawl"])
+        out = capsys.readouterr().out
+        assert "NASDAQ100" in out
+
+    def test_crawl_single_index(self, capsys):
+        from unittest.mock import patch, AsyncMock
+        from crawler.report import CollectionReport
+
+        fake_report = CollectionReport(
+            index_name="NASDAQ100", total=3, succeeded=3,
+            failed=0, skipped=0, elapsed_seconds=5.0,
+        )
+        with patch("cli.crawl_index", AsyncMock(return_value=fake_report)):
+            main(["crawl", "NASDAQ100"])
+        out = capsys.readouterr().out
+        assert "NASDAQ100" in out
+
+    def test_crawl_backfill(self, capsys):
+        from unittest.mock import patch, AsyncMock
+        from crawler.report import CollectionReport
+
+        fake_reports = [
+            CollectionReport(
+                index_name="TEST", total=1, succeeded=1,
+                failed=0, skipped=0, elapsed_seconds=1.0,
+            ),
+        ]
+        mock_crawl_all = AsyncMock(return_value=fake_reports)
+        with patch("cli.crawl_all", mock_crawl_all):
+            main(["crawl", "--backfill"])
+        # Verify backfill was passed
+        mock_crawl_all.assert_called_once()
+        _, kwargs = mock_crawl_all.call_args
+        assert kwargs.get("backfill") is True
+
+    def test_crawl_invalid_index(self, capsys):
+        main(["crawl", "INVALID_INDEX"])
+        out = capsys.readouterr().out
+        assert "Unknown index" in out or "unknown" in out.lower() or "error" in out.lower()
