@@ -391,15 +391,12 @@ def _safe_float(df: pd.DataFrame, row_label: str, col: Any) -> float | None:
 
 
 def _sync_earnings_akshare_hk(symbol: str) -> list[dict]:
+    """Fetch HK earnings from akshare. Raises on failure for yfinance fallback."""
     import akshare as ak
     code = symbol.upper().replace(".HK", "")
-    try:
-        df = ak.stock_financial_hk_report_em(stock=code, symbol="利润")
-    except Exception:
-        logger.exception("Failed to fetch HK earnings for %s", symbol)
-        return []
+    df = ak.stock_financial_hk_report_em(stock=code, symbol="利润")
     if df is None or df.empty:
-        return []
+        raise ValueError(f"No HK earnings data from akshare for {symbol}")
     results = []
     for _, row in df.iterrows():
         results.append({
@@ -456,15 +453,12 @@ def _sync_dividends_yfinance(symbol: str) -> list[dict]:
 
 
 def _sync_dividends_akshare_hk(symbol: str) -> list[dict]:
+    """Fetch HK dividends from akshare. Raises on failure for yfinance fallback."""
     import akshare as ak
     code = symbol.upper().replace(".HK", "")
-    try:
-        df = ak.stock_hk_dividend_payout_em(symbol=code)
-    except Exception:
-        logger.exception("Failed to fetch HK dividends for %s", symbol)
-        return []
+    df = ak.stock_hk_dividend_payout_em(symbol=code)
     if df is None or df.empty:
-        return []
+        raise ValueError(f"No HK dividend data from akshare for {symbol}")
     results = []
     for _, row in df.iterrows():
         ex_date = str(row.get("除净日", ""))[:10]
@@ -506,34 +500,31 @@ async def get_dividends(symbol: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def _sync_fundamentals_akshare_hk(symbol: str) -> dict:
+    """Fetch HK fundamentals from akshare (eastmoney).
+
+    Raises on failure so the caller can fall back to yfinance.
+    """
     import akshare as ak
     code = symbol.upper().replace(".HK", "")
-    try:
-        df = ak.stock_hk_spot_em()
-        row = df[df["代码"] == code]
-        if row.empty:
-            return {
-                "symbol": symbol, "pe_ttm": None, "pb": None,
-                "market_cap": None, "revenue_ttm": None,
-                "net_profit_ttm": None, "dividend_yield": None,
-            }
-        row = row.iloc[0]
-        return {
-            "symbol": symbol,
-            "pe_ttm": _try_float(row.get("市盈率(动态)")),
-            "pb": _try_float(row.get("市净率")),
-            "market_cap": _try_float(row.get("总市值")),
-            "revenue_ttm": None,
-            "net_profit_ttm": None,
-            "dividend_yield": None,
-        }
-    except Exception:
-        logger.exception("Failed to fetch HK fundamentals for %s", symbol)
-        return {
-            "symbol": symbol, "pe_ttm": None, "pb": None,
-            "market_cap": None, "revenue_ttm": None,
-            "net_profit_ttm": None, "dividend_yield": None,
-        }
+    df = ak.stock_hk_spot_em()
+    row = df[df["代码"] == code]
+    if row.empty:
+        raise ValueError(f"HK stock not found in akshare: {symbol}")
+    row = row.iloc[0]
+    pe = _try_float(row.get("市盈率(动态)"))
+    pb = _try_float(row.get("市净率"))
+    market_cap = _try_float(row.get("总市值"))
+    if pe is None and pb is None and market_cap is None:
+        raise ValueError(f"No meaningful fundamentals from akshare for {symbol}")
+    return {
+        "symbol": symbol,
+        "pe_ttm": pe,
+        "pb": pb,
+        "market_cap": market_cap,
+        "revenue_ttm": None,
+        "net_profit_ttm": None,
+        "dividend_yield": None,
+    }
 
 
 def _try_float(val: Any) -> float | None:
