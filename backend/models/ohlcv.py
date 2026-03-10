@@ -8,7 +8,7 @@ class OHLCVBar(Base):
     __tablename__ = "ohlcv_bar"
     __table_args__ = (
         UniqueConstraint("symbol", "interval", "timestamp", name="uq_ohlcv_bar"),
-        Index("ix_ohlcv_bar_symbol", "symbol"),
+        Index("ix_ohlcv_bar_lookup", "symbol", "interval", "timestamp"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
