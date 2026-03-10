@@ -110,18 +110,23 @@ async def _upsert_bars(
     interval: str,
     bars: list[dict],
 ) -> None:
-    for bar in bars:
-        stmt = sqlite_insert(OHLCVBar).values(
-            symbol=symbol,
-            interval=interval,
-            timestamp=bar["timestamp"],
-            open=bar["open"],
-            high=bar["high"],
-            low=bar["low"],
-            close=bar["close"],
-            volume=bar["volume"],
-        ).on_conflict_do_nothing(
-            index_elements=["symbol", "interval", "timestamp"],
-        )
-        await db.execute(stmt)
+    if not bars:
+        return
+    rows = [
+        {
+            "symbol": symbol,
+            "interval": interval,
+            "timestamp": bar["timestamp"],
+            "open": bar["open"],
+            "high": bar["high"],
+            "low": bar["low"],
+            "close": bar["close"],
+            "volume": bar["volume"],
+        }
+        for bar in bars
+    ]
+    stmt = sqlite_insert(OHLCVBar).values(rows).on_conflict_do_nothing(
+        index_elements=["symbol", "interval", "timestamp"],
+    )
+    await db.execute(stmt)
     await db.commit()
