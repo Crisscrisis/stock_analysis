@@ -32,6 +32,14 @@ export default function App() {
     }
   }
 
+  const handleIndexSelect = (symbol: string, name: string | null, market: string) => {
+    setSelected(symbol)
+    const alreadyIn = items.some((i) => i.symbol === symbol)
+    if (!alreadyIn) {
+      add(symbol, name, market).catch(() => {})
+    }
+  }
+
   const sidebarPrices: Record<string, { price: number; change_pct: number }> = {}
   Object.entries(prices).forEach(([sym, p]) => {
     sidebarPrices[sym] = { price: p.price, change_pct: p.change_pct }
@@ -51,6 +59,7 @@ export default function App() {
           prices={sidebarPrices}
           onSelect={setSelected}
           onRemove={remove}
+          onIndexSelect={handleIndexSelect}
         />
 
         <main className="flex-1 flex flex-col overflow-hidden">

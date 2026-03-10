@@ -90,3 +90,16 @@ export interface WsPrice {
   change_pct: number
   timestamp: number
 }
+
+export interface IndexInfo {
+  name: string
+  market: string
+  active_count: number
+}
+
+export interface IndexConstituent {
+  symbol: string
+  name: string
+  market: string
+  is_active: boolean
+}

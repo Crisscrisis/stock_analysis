@@ -1,4 +1,4 @@
-import type { CapitalFlow, Fundamentals, IndicatorsData, OHLCVData, Quote, SearchResult } from '../types'
+import type { CapitalFlow, Fundamentals, IndicatorsData, IndexConstituent, IndexInfo, OHLCVData, Quote, SearchResult } from '../types'
 import { api } from './client'
 
 export const stocksApi = {
@@ -21,4 +21,10 @@ export const stocksApi = {
 
   getCapitalFlow: (symbol: string) =>
     api.get<CapitalFlow>(`/capital-flow/${encodeURIComponent(symbol)}`),
+
+  getIndices: () =>
+    api.get<IndexInfo[]>('/indices'),
+
+  getConstituents: (name: string) =>
+    api.get<IndexConstituent[]>(`/indices/${encodeURIComponent(name)}/constituents`),
 }
