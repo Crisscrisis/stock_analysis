@@ -11,6 +11,8 @@ export function useWebSocket(symbol: string | null) {
   useEffect(() => {
     if (!symbol) return
 
+    setPrice(null)
+
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
     const ws = new WebSocket(`${protocol}://${window.location.host}/ws/price/${symbol}`)
     wsRef.current = ws
